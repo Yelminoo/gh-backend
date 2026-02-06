@@ -1,0 +1,365 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider      = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+enum Role {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum ShopRole {
+  OWNER
+  STORE_ADMIN
+  STAFF
+}
+
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+
+  shops     ShopMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Shop {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+
+  members   ShopMember[]
+  products  Product[]
+  orders    Order[]
+  warehouses Warehouse[]
+  parcels   Parcel[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Warehouse {
+  id        String   @id @default(uuid())
+  shopId    String
+  
+  // Basic information
+  name      String   // e.g., "Main Store", "Downtown Outlet", "Online Fulfillment Center"
+  code      String   // Short code for internal reference (e.g., "MAIN", "DT-01")
+  
+  // Location details
+  address   String
+  city      String
+  state     String?  // State/Province
+  country   String
+  postalCode String?
+  
+  // Contact information
+  phone     String?
+  email     String?
+  
+  // Operational
+  isActive  Boolean  @default(true)
+  isPrimary Boolean  @default(false) // Primary/default warehouse for this shop
+  
+  // Capacity (optional tracking)
+  maxCapacity Decimal? // Square footage or other capacity metric
+  notes       String?  // Special instructions, operating hours, etc.
+  
+  // Relations
+  shop      Shop              @relation(fields: [shopId], references: [id])
+  parcels   Parcel[]
+  movementsFrom ParcelMovement[] @relation("FromWarehouse")
+  movementsTo   ParcelMovement[] @relation("ToWarehouse")
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([shopId, code])  // Each shop has unique warehouse codes
+  @@index([shopId, isActive])
+}
+
+model ShopMember {
+  id        String   @id @default(uuid())
+  userId    String
+  shopId    String
+  role      ShopRole
+
+  user      User @relation(fields: [userId], references: [id])
+  shop      Shop @relation(fields: [shopId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, shopId])
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+
+  products    Product[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  shopId      String
+  categoryId  String?
+  name        String
+  description String?
+  images      String[] // Array of image URLs
+  isActive    Boolean  @default(true)
+  
+  // Inventory management type
+  inventoryType InventoryType @default(INDIVIDUAL)
+
+  shop        Shop     @relation(fields: [shopId], references: [id])
+  category    Category? @relation(fields: [categoryId], references: [id])
+  variants    ProductVariant[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ProductVariant {
+  id        String   @id @default(uuid())
+  productId String
+
+  sku       String   @unique
+  price     Decimal
+  stock     Int      // For INDIVIDUAL: actual count; For PARCEL: calculated from parcels
+  attributes Json    // size, color, stone_type, cut, clarity, etc.
+  
+  // Parcel-based inventory
+  trackByParcel Boolean @default(false) // If true, stock comes from parcels
+
+  product   Product  @relation(fields: [productId], references: [id])
+  orderItems  OrderItem[] 
+  parcels     Parcel[]  // Multiple parcels can supply this variant
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id        String   @id @default(uuid())
+  shopId    String
+
+  status    OrderStatus
+  total     Decimal
+
+  shop      Shop     @relation(fields: [shopId], references: [id])
+  items     OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  variantId String
+
+  price     Decimal
+  quantity  Int
+
+  order     Order          @relation(fields: [orderId], references: [id])
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  allocations OrderItemAllocation[]  // Track which parcels fulfill this item
+}
+
+// ============================================
+// STONE/GEMSTONE INVENTORY SYSTEM
+// ============================================
+
+enum InventoryType {
+  INDIVIDUAL  // Single pieces (rings, necklaces) - standard e-commerce
+  PARCEL      // Bulk/Batch (loose stones, rough material) - wholesale/B2B
+  HYBRID      // Can sell both ways (certified stones)
+}
+
+enum StoneUnit {
+  PIECE       // Individual items (1 ring, 1 pendant)
+  CARAT       // Gemstones weight
+  GRAM        // Metal/stone weight
+  KILOGRAM    // Bulk stone
+  SQFT        // Slabs
+  SLAB        // Stone slabs
+  TON         // Large bulk
+  LOT         // Pre-packaged lot
+}
+
+enum ParcelStatus {
+  IN_STOCK
+  RESERVED
+  SOLD
+  IN_TRANSIT
+  DAMAGED
+}
+
+// Main inventory tracking - links product variants to physical parcels
+model Parcel {
+  id            String        @id @default(uuid())
+  shopId        String
+  warehouseId   String        // Location where this parcel is stored
+  variantId     String?       // Optional: can track parcels without listing them
+  
+  // Identification
+  parcelCode    String        @unique  // Your internal/supplier reference (e.g., "RUBY-2024-001")
+  supplierRef   String?       // Supplier's reference number
+  
+  // Physical properties
+  origin        String?       // Mine/quarry/country (e.g., "Mogok, Myanmar")
+  qualityGrade  String?       // A, AA, AAA, Premium, Commercial
+  certification String?       // GIA, IGI certificate number
+  
+  // Inventory details
+  unit          StoneUnit     // How this parcel is measured
+  totalQuantity Decimal       // Total amount received (e.g., 500 carats)
+  available     Decimal       // Currently available (updated on sales)
+  reserved      Decimal       @default(0) // Temporarily held (cart/pending orders)
+  minOrderQty   Decimal?      // Minimum purchase quantity
+  
+  // Pricing
+  costPrice     Decimal?      // Your purchase cost (for profit tracking)
+  wholesalePrice Decimal?     // B2B price
+  retailPrice   Decimal?      // B2C price per unit
+  
+  // Metadata
+  notes         String?       // Internal notes
+  images        String[]      // Parcel-specific images
+  receivedAt    DateTime      @default(now())
+  status        ParcelStatus  @default(IN_STOCK)
+  
+  // Relations
+  shop          Shop          @relation(fields: [shopId], references: [id])
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id])
+  variant       ProductVariant? @relation(fields: [variantId], references: [id])
+  transactions  ParcelTransaction[]
+  allocations   OrderItemAllocation[]
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([shopId, status])
+  @@index([warehouseId, status])
+  @@index([variantId])
+  @@index([parcelCode])
+}
+
+// Track every movement of inventory (audit trail)
+model ParcelTransaction {
+  id          String   @id @default(uuid())
+  parcelId    String
+  
+  type        TransactionType
+  quantity    Decimal       // Amount moved (positive = increase, negative = decrease)
+  reference   String?       // Order ID, return ID, adjustment ID
+  notes       String?
+  performedBy String?       // User ID who made the change
+  
+  parcel      Parcel   @relation(fields: [parcelId], references: [id])
+  
+  createdAt   DateTime @default(now())
+
+  @@index([parcelId, createdAt])
+}
+
+enum TransactionType {
+  RECEIVED      // New stock arrival
+  SALE          // Sold to customer
+  RESERVED      // Held for pending order
+  RELEASED      // Reserved quantity released back
+  ADJUSTMENT    // Manual correction
+  DAMAGED       // Marked as damaged/lost
+  RETURNED      // Customer return
+  TRANSFERRED   // Moved to another location/shop
+}
+
+enum MovementStatus {
+  PENDING       // Transfer initiated but not started
+  IN_TRANSIT    // Currently being moved
+  COMPLETED     // Successfully transferred
+  CANCELLED     // Transfer cancelled
+  REJECTED      // Receiving warehouse rejected
+}
+
+// Link order items to specific parcels (handles partial fulfillment)
+model OrderItemAllocation {
+  id          String   @id @default(uuid())
+  orderItemId String
+  parcelId    String
+  
+  quantity    Decimal  // How much from this parcel
+  
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+  parcel      Parcel    @relation(fields: [parcelId], references: [id])
+  
+  createdAt   DateTime @default(now())
+
+  @@index([orderItemId])
+  @@index([parcelId])
+}
+
+// Track parcel movements between warehouses (inter-warehouse transfers)
+model ParcelMovement {
+  id              String         @id @default(uuid())
+  parcelId        String
+  fromWarehouseId String
+  toWarehouseId   String
+  
+  quantity        Decimal        // Amount being transferred
+  status          MovementStatus @default(PENDING)
+  
+  // Tracking
+  initiatedBy     String         // User ID who initiated
+  approvedBy      String?        // User ID who approved (if required)
+  completedBy     String?        // User ID who completed
+  
+  reason          String?        // Why the transfer (restock, customer proximity, etc.)
+  notes           String?        // Special handling instructions
+  
+  // Timestamps
+  initiatedAt     DateTime       @default(now())
+  approvedAt      DateTime?
+  completedAt     DateTime?
+  
+  // Relations
+  fromWarehouse   Warehouse      @relation("FromWarehouse", fields: [fromWarehouseId], references: [id])
+  toWarehouse     Warehouse      @relation("ToWarehouse", fields: [toWarehouseId], references: [id])
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  @@index([parcelId, status])
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+}
