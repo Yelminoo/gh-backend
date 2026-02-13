@@ -9,6 +9,34 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  console.log('Start seeding...');
+
+  // 1. Create a test user
+  const testUser = await prisma.user.upsert({
+    where: { email: 'admin@example.com' },
+    update: {},
+    create: {
+      email: 'admin@example.com',
+      password: '$2b$10$YourHashedPasswordHere', // This should be properly hashed
+    },
+  });
+  console.log(`Created/Updated user: ${testUser.email}`);
+
+  // 2. Create a test shop
+  const testShop = await prisma.shop.upsert({
+    where: { slug: 'test-shop' },
+    update: {},
+    create: {
+      name: 'Test Jewelry Shop',
+      slug: 'test-shop',
+      isActive: true,
+    },
+  });
+  console.log(`Created/Updated shop: ${testShop.name} (ID: ${testShop.id})`);
+
+  console.log(`   Shop ID: ${testShop.id}\n`);
+
+  // 3. Seed categories
   console.log('Start seeding categories...');
 
   const categories = [

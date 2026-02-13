@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { ProductsModule } from './products/products.module';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
+import { SanitizeMiddleware } from './common/middleware/sanitize.middleware';
 // import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import {
   LoggingInterceptor,
@@ -13,6 +14,9 @@ import {
 } from './common/interceptors/logging.interceptor';
 import { CategoriesModule } from './categories/categories.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
+import { ParcelsModule } from './parcels/parcels.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -23,6 +27,9 @@ import { WarehousesModule } from './warehouses/warehouses.module';
     ProductsModule,
     CategoriesModule,
     WarehousesModule,
+    ParcelsModule,
+    AnalyticsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [
@@ -46,6 +53,6 @@ import { WarehousesModule } from './warehouses/warehouses.module';
 export class AppModule implements NestModule {
   // 🌍 Global Middleware (with DI support)
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(LoggerMiddleware).forRoutes('*'); // Apply to all routes
+    consumer.apply(SanitizeMiddleware, LoggerMiddleware).forRoutes('*'); // Apply to all routes
   }
 }

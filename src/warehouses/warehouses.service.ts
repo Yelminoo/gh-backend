@@ -9,11 +9,17 @@ export class WarehousesService {
   constructor(private prisma: PrismaService) {}
 
   async create(createWarehouseDto: CreateWarehouseDto) {
-    // If isPrimary is true, unset other primary warehouses for this shop
-    if (createWarehouseDto.isPrimary) {
+    // Clean up shopId - remove if empty string or invalid
+    const cleanedData = { ...createWarehouseDto };
+    if (!cleanedData.shopId || cleanedData.shopId.trim() === '') {
+      delete cleanedData.shopId;
+    }
+
+    // If isPrimary is true and shopId exists, unset other primary warehouses for this shop
+    if (cleanedData.isPrimary && cleanedData.shopId) {
       await this.prisma.warehouse.updateMany({
         where: {
-          shopId: createWarehouseDto.shopId,
+          shopId: cleanedData.shopId,
           isPrimary: true,
         },
         data: {
@@ -24,24 +30,30 @@ export class WarehousesService {
 
     return this.prisma.warehouse.create({
       data: {
-        ...createWarehouseDto,
-        maxCapacity: createWarehouseDto.maxCapacity
-          ? new Prisma.Decimal(createWarehouseDto.maxCapacity)
+        ...cleanedData,
+        maxCapacity: cleanedData.maxCapacity
+          ? new Prisma.Decimal(cleanedData.maxCapacity)
           : null,
       },
       include: {
-        shop: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-          },
-        },
+        shop: cleanedData.shopId
+          ? {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+              },
+            }
+          : false,
       },
     });
   }
 
-  async findAll(shopId?: string, isActive?: boolean) {
+  async findAll(
+    shopId?: string,
+    isActive?: boolean,
+    type?: 'PHYSICAL' | 'VIRTUAL',
+  ) {
     const where: Prisma.WarehouseWhereInput = {};
 
     if (shopId) {
@@ -50,6 +62,10 @@ export class WarehousesService {
 
     if (isActive !== undefined) {
       where.isActive = isActive;
+    }
+
+    if (type) {
+      where.type = type;
     }
 
     return this.prisma.warehouse.findMany({
