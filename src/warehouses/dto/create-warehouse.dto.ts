@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsEmail,
+  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -9,32 +10,36 @@ import { Type } from 'class-transformer';
 
 export class CreateWarehouseDto {
   @IsString()
-  @IsNotEmpty()
-  shopId: string;
+  @IsOptional()
+  shopId?: string;
 
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @IsString()
   @IsNotEmpty()
-  code: string;
+  code!: string;
+
+  @IsEnum(['PHYSICAL', 'VIRTUAL'])
+  @IsOptional()
+  type?: 'PHYSICAL' | 'VIRTUAL';
 
   @IsString()
-  @IsNotEmpty()
-  address: string;
+  @IsOptional()
+  address?: string;
 
   @IsString()
-  @IsNotEmpty()
-  city: string;
+  @IsOptional()
+  city?: string;
 
   @IsString()
   @IsOptional()
   state?: string;
 
   @IsString()
-  @IsNotEmpty()
-  country: string;
+  @IsOptional()
+  country?: string;
 
   @IsString()
   @IsOptional()
@@ -55,6 +60,10 @@ export class CreateWarehouseDto {
   @IsBoolean()
   @IsOptional()
   isPrimary?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isSystem?: boolean;
 
   @IsOptional()
   @Type(() => Number)

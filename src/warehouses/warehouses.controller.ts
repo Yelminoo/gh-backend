@@ -25,10 +25,11 @@ export class WarehousesController {
   findAll(
     @Query('shopId') shopId?: string,
     @Query('isActive') isActive?: string,
+    @Query('type') type?: 'PHYSICAL' | 'VIRTUAL',
   ) {
     const isActiveBoolean =
       isActive === 'true' ? true : isActive === 'false' ? false : undefined;
-    return this.warehousesService.findAll(shopId, isActiveBoolean);
+    return this.warehousesService.findAll(shopId, isActiveBoolean, type);
   }
 
   @Get(':id')
