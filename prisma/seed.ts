@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import * as bcrypt from 'bcrypt';
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
@@ -96,6 +97,21 @@ async function main() {
     });
     console.log(`Created/Updated category: ${category.name}`);
   }
+
+  console.log('Start seeding users...');
+
+  const hashedPassword = await bcrypt.hash('admin123', 10);
+
+  await prisma.user.upsert({
+    where: { email: 'admin@gemhaven.com' },
+    update: {},
+    create: {
+      email: 'admin@gemhaven.com',
+      password: hashedPassword,
+      role: 'ADMIN',
+    },
+  });
+  console.log('Created/Updated admin user: admin@gemhaven.com');
 
   console.log('Seeding finished.');
 }
